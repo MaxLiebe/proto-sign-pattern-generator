@@ -70,7 +70,7 @@ GButton exportButton;
   }
   
   void draw() {
-    background(255);
+    background(0);
     animation();
     drawBufferframe();
     
