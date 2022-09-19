@@ -4,7 +4,8 @@ Written by Max Liebe, secretary of the 12th board of S.A. Proto.
 
 HOW TO USE
 ----------
-In order to generate a custom pattern, you can use the initialSetup() and animation() functions for basic animations. 
+In order to generate a custom pattern, create a new class that extends Pattern (check one of the examples), then use 
+the initialSetup() and animation() functions for basic animations. 
 
 Feel free to extend this program should you want to create more complex animations. However, make sure that it can be reset with initialSetup()
 and that each frame gets fully handled with animation() or the exported animation might differ from the preview
@@ -17,18 +18,12 @@ NOTE
 If the program gives an error, make sure to install the G4P library.
 */
 
-int VERSION = 0;
+int VERSION = 1;
 
-int patternScreenWidth = 800;
-int patternScreenHeight = 800;
-
-int horLEDs = 37; //max: 255, 37 is the resolution of the Proto sign
-int verLEDs = 15; //max: 255, 15 is the resolution of the Proto sign
 int ledRadius = 20; //radius at which the preview LEDs are drawn
-
 int targetFrameRate = 60; //targeted frame rate the animation is exported (and previewed, if possible) with
 
-color[][] frameBuffer; //main "image" buffer of the animation, should get updated every frame in the animation() method
+Pattern pattern;
 
 //gui stuff
 import g4p_controls.*;
@@ -42,11 +37,9 @@ GButton exportButton;
 
   void setup() {
     size(800, 850);
-    frameBuffer = new color[horLEDs][verLEDs];
     noStroke();
     
-    //initial setup should reset/prepare the animation
-    initialSetup();
+    pattern = new GreenSnakePattern(37, 15, 800, 800); //change class type to switch patterns
     
     //gui stuff
     fpsLabel = new GLabel(this, 170, height - 30, 40, 60);
@@ -71,49 +64,12 @@ GButton exportButton;
   
   void draw() {
     background(0);
-    animation();
-    drawBufferframe();
+    pattern.animation();
+    pattern.drawPreviewFrame(ledRadius);
     
     //gui stuff
     fill(190);
-    rect(0, patternScreenHeight, width, height);
-  }
-  
-  void initialSetup() {
-    //set some initial values here (e.g. initial frame buffer values)
-    
-    //example: each pixel starts at a random hue with full saturation and brightness.
-    for(int x = 0; x < horLEDs; x++) {
-      for(int y = 0; y < verLEDs; y++) {
-        pushStyle();
-        colorMode(HSB);
-        frameBuffer[x][y] = color(random(255), 255, 255);
-        popStyle();
-      }
-    }
-  }
-  
-  void animation() {
-    //your animation here, every execution of this function handles 1 frame
-    
-    //example: shift the hue of each LED by 1, looping around at the end
-    for(int x = 0; x < horLEDs; x++) {
-      for(int y = 0; y < verLEDs; y++) {
-        pushStyle();
-        colorMode(HSB);
-        frameBuffer[x][y] = color(hue(frameBuffer[x][y]) + 1, 255, 255);
-        popStyle();
-      }
-    }
-  }
-  
-  void drawBufferframe() {
-    for(int x = 0; x < horLEDs; x++) {
-      for(int y = 0; y < verLEDs; y++) {
-        fill(frameBuffer[x][y]);
-        circle(map(x, 0, horLEDs, ledRadius, patternScreenWidth), map(y, 0, verLEDs, ledRadius, patternScreenHeight), ledRadius);
-      }
-    }
+    rect(0, pattern.getPatternHeight(), width, height);
   }
   
   void handleTextEvents(GEditableTextControl textControl, GEvent event) {
@@ -122,29 +78,21 @@ GButton exportButton;
   
   void handleButtonEvents(GButton button, GEvent event) {
     //export the animation as a .plep file to be parsed
+    
+    //get the total amount of frames the user inputted
     int frames = durationInput.getValueI();
-    byte[] data = new byte[6 + (3 * frames * horLEDs * verLEDs)];
+    
+    //run the animation for the specified amount of frames, and get these frames' frameBuffer subsequently encoded in a byte[]
+    byte[] data = pattern.runAnimationBufferData(frames, 6);
     
     //write the version, length, frame rate and resolution of the animation as a header
     data[0] = (byte)VERSION;
-    data[1] = (byte)(frames);
+    data[1] = (byte)frames;
     data[2] = (byte)(frames >> 8);
-    data[3] = (byte)(targetFrameRate);
-    data[4] = (byte)horLEDs;
-    data[5] = (byte)verLEDs;
+    data[3] = (byte)targetFrameRate;
+    data[4] = (byte)pattern.getHorLEDs();
+    data[5] = (byte)pattern.getVerLEDs();
     
-    initialSetup();
-    for(int i = 0; i < frames; i++) {
-      animation();
-      for(int x = 0; x < horLEDs; x++) {
-        for(int y = 0; y < verLEDs; y++) {
-          int offset = 6 + (3 * i * horLEDs * verLEDs) + (3 * x * verLEDs) + (3 * y);
-          data[offset] = byte(red(frameBuffer[x][y]));
-          data[offset + 1] = byte(green(frameBuffer[x][y]));
-          data[offset + 2] = byte(blue(frameBuffer[x][y]));
-        }
-      } 
-    }
     String file = G4P.selectOutput("Choose a location to save to", "plep", "Proto LED Effect Pattern");
     if(file.endsWith(".plep")){
       file = file.substring(0, file.length()-5);
